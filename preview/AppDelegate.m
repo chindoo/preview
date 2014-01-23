@@ -7,12 +7,23 @@
 //
 
 #import "AppDelegate.h"
+#import "PDFPageViewController.h"
+#import "SessionManager.h"
+
+@interface AppDelegate()
+
+@property (nonatomic, weak) UINavigationController* rootNavController;
+@property (nonatomic, strong) PDFPageViewController* pdfPageVC;
+
+@end
 
 @implementation AppDelegate
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
 {
     // Override point for customization after application launch.
+    self.rootNavController = (UINavigationController*)self.window.rootViewController;
+
     return YES;
 }
 							
@@ -41,6 +52,36 @@
 - (void)applicationWillTerminate:(UIApplication *)application
 {
     // Called when the application is about to terminate. Save data if appropriate. See also applicationDidEnterBackground:.
+}
+
+
+- (BOOL)application:(UIApplication *)application openURL:(NSURL *)url sourceApplication:(NSString *)sourceApplication annotation:(id)annotation
+{
+    NSLog(@"Open URL: %@", url);
+    
+//    if(self.pdfVC)
+//    {
+//        [self.rootNavController popViewControllerAnimated:NO];
+//        self.pdfVC = nil;
+//    }
+//    
+//    self.pdfVC = [[PDFViewController alloc] initWithNibName:@"PDFViewController" bundle:nil];
+//    self.pdfVC.pdfURL = url;
+//    [self.rootNavController pushViewController:self.pdfVC animated:YES];
+    
+    if(self.pdfPageVC)
+    {
+        [self.rootNavController popViewControllerAnimated:NO];
+        self.pdfPageVC = nil;
+    }
+    
+    self.pdfPageVC = [[PDFPageViewController alloc] initWithNibName:@"PDFPageViewController" bundle:nil];
+    self.pdfPageVC.pdfURL = url;
+    [SessionManager shared].sessionOwner = YES;
+    [self.rootNavController pushViewController:self.pdfPageVC animated:YES];
+    
+    return YES;
+    
 }
 
 @end

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.iPad.XIB" version="3.0" toolsVersion="4514" systemVersion="13B42" targetRuntime="iOS.CocoaTouch.iPad" propertyAccessControl="none" useAutolayout="YES">
+    <dependencies>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="3747"/>
+    </dependencies>
+    <objects>
+        <placeholder placeholderIdentifier="IBFilesOwner" id="-1" userLabel="File's Owner" customClass="PDFPageViewController">
+            <connections>
+                <outlet property="toobar" destination="LXN-AB-ePP" id="CJ4-IF-3Pa"/>
+                <outlet property="view" destination="2" id="3"/>
+            </connections>
+        </placeholder>
+        <placeholder placeholderIdentifier="IBFirstResponder" id="-2" customClass="UIResponder"/>
+        <view clearsContextBeforeDrawing="NO" contentMode="scaleToFill" id="2">
+            <rect key="frame" x="0.0" y="0.0" width="768" height="1004"/>
+            <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+            <subviews>
+                <toolbar opaque="NO" clearsContextBeforeDrawing="NO" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="LXN-AB-ePP">
+                    <rect key="frame" x="0.0" y="960" width="768" height="44"/>
+                    <autoresizingMask key="autoresizingMask" widthSizable="YES" flexibleMinY="YES"/>
+                    <items>
+                        <barButtonItem title="Previous Page" id="ex8-q7-cgo">
+                            <connections>
+                                <action selector="previousPagePressed:" destination="-1" id="Uev-R1-jF9"/>
+                            </connections>
+                        </barButtonItem>
+                        <barButtonItem style="plain" systemItem="flexibleSpace" id="TbT-wd-Aqv"/>
+                        <barButtonItem title="Exit" id="z87-Hl-Mh7">
+                            <connections>
+                                <action selector="exitPressed:" destination="-1" id="dyh-hk-MQy"/>
+                            </connections>
+                        </barButtonItem>
+                        <barButtonItem style="plain" systemItem="flexibleSpace" id="qye-Ku-tHK"/>
+                        <barButtonItem title="Next Page" id="rXc-kn-rh4">
+                            <connections>
+                                <action selector="nextPagePressed:" destination="-1" id="kE0-BU-7RF"/>
+                            </connections>
+                        </barButtonItem>
+                    </items>
+                </toolbar>
+            </subviews>
+            <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="calibratedWhite"/>
+            <constraints>
+                <constraint firstAttribute="bottom" secondItem="LXN-AB-ePP" secondAttribute="bottom" id="3s3-tJ-2sX"/>
+                <constraint firstItem="LXN-AB-ePP" firstAttribute="leading" secondItem="2" secondAttribute="leading" id="eh6-ZJ-dod"/>
+                <constraint firstAttribute="trailing" secondItem="LXN-AB-ePP" secondAttribute="trailing" id="gE3-Gf-Tpy"/>
+            </constraints>
+            <simulatedStatusBarMetrics key="simulatedStatusBarMetrics" statusBarStyle="lightContent"/>
+        </view>
+    </objects>
+</document>

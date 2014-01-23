@@ -1,0 +1,6 @@
+[submodule "External/Reader"]
+	path = External/Reader
+	url = git@github.com:vfr/Reader.git
+[submodule "External/MBProgressHUD"]
+	path = External/MBProgressHUD
+	url = git@github.com:jdg/MBProgressHUD.git
