@@ -15,7 +15,7 @@
 #import "SessionManager.h"
 #import <QuickLook/QuickLook.h>
 
-@interface PDFPageViewController () <MCNearbyServiceBrowserDelegate, UIAlertViewDelegate, ReaderContentViewDelegate>
+@interface PDFPageViewController () <MCNearbyServiceAdvertiserDelegate, UIAlertViewDelegate, ReaderContentViewDelegate>
 
 @property (weak, nonatomic) IBOutlet UIToolbar *toobar;
 - (IBAction)previousPagePressed:(id)sender;
@@ -30,7 +30,7 @@
 @property (nonatomic, strong) NSMutableArray* currentPageViewConstraints;
 
 
-@property (nonatomic, strong) MCNearbyServiceBrowser* serviceBrowser;
+@property (nonatomic, strong) MCNearbyServiceAdvertiser* advertiser;
 
 @property (nonatomic, assign) BOOL receivedPage;
 
@@ -62,12 +62,14 @@
     
     if ([SessionManager shared].sessionOwner) {
         
-        self.serviceBrowser = [[MCNearbyServiceBrowser alloc] initWithPeer:[[SessionManager shared] peer] serviceType:@"sch-preview"];
-        self.serviceBrowser.delegate = self;
-
-        [[[SessionManager shared] session] setDelegate:self];
+        NSLog(@"Session owner starting Advertising");
         
-        [self.serviceBrowser startBrowsingForPeers];
+        self.advertiser = [[MCNearbyServiceAdvertiser alloc] initWithPeer:[[SessionManager shared] advertisingPeer] discoveryInfo:nil serviceType:@"sch-preview"];
+        self.advertiser.delegate = self;
+        
+        [[[SessionManager shared] advertisingSession] setDelegate:self];
+        
+        [self.advertiser startAdvertisingPeer];
 
     }
     else
@@ -150,60 +152,55 @@
 - (IBAction)exitPressed:(id)sender {
     
     [[[SessionManager shared] session] disconnect];
+    [self.advertiser stopAdvertisingPeer];
     
     [self.navigationController popViewControllerAnimated:YES];
 }
 
 -(void) tellPeersToOpenPage:(NSInteger)page
 {
-    [self tellPeers:[[SessionManager shared] session].connectedPeers toOpenPage:page];
+    [self tellPeers:[[SessionManager shared] advertisingSession].connectedPeers toOpenPage:page];
 }
 
 -(void) tellPeers:(NSArray*)peers toOpenPage:(NSInteger)page
 {
-    PreviewPageMessage* message = [[PreviewPageMessage alloc] initWithPage:page];
-    NSData* data = [NSKeyedArchiver archivedDataWithRootObject:message];
-
-    NSError* error = nil;
-    
-    if(![[[SessionManager shared] session] sendData:data toPeers:peers withMode:MCSessionSendDataReliable error:&error])
+    if(peers.count > 0)
     {
-        NSLog(@"Error sending data to peer: %@", error);
+        PreviewPageMessage* message = [[PreviewPageMessage alloc] initWithPage:page];
+        NSData* data = [NSKeyedArchiver archivedDataWithRootObject:message];
+        
+        NSError* error = nil;
+        
+        if(![[[SessionManager shared] advertisingSession] sendData:data toPeers:peers withMode:MCSessionSendDataReliable error:&error])
+        {
+            NSLog(@"Error sending data to peer: %@", error);
+        }
     }
 }
 
-#pragma mark - MCNearbyServiceBrowserDelegate
-// Found a nearby advertising peer
-- (void)browser:(MCNearbyServiceBrowser *)browser foundPeer:(MCPeerID *)peerID withDiscoveryInfo:(NSDictionary *)info
+#pragma mark - MCNearbyAdvertisingDelegate
+// Incoming invitation request.  Call the invitationHandler block with YES and a valid session to connect the inviting peer to the session.
+- (void)advertiser:(MCNearbyServiceAdvertiser *)advertiser didReceiveInvitationFromPeer:(MCPeerID *)peerID withContext:(NSData *)context invitationHandler:(void(^)(BOOL accept, MCSession *session))invitationHandler
 {
-    if (peerID != [[SessionManager shared] peer]) {
-        NSLog(@"Found peer: %@, %@", peerID, peerID.displayName);
-
-        // invite the peer
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [browser invitePeer:peerID toSession:[[SessionManager shared] session] withContext:nil timeout:3000];
-        });
-    }
-    
-
+    // accept the invite
+    dispatch_async(dispatch_get_main_queue(), ^{
+        invitationHandler(YES, [[SessionManager shared] advertisingSession]);
+    });
 }
 
-// A nearby peer has stopped advertising
-- (void)browser:(MCNearbyServiceBrowser *)browser lostPeer:(MCPeerID *)peerID
+// Advertising did not start due to an error
+- (void)advertiser:(MCNearbyServiceAdvertiser *)advertiser didNotStartAdvertisingPeer:(NSError *)error
 {
-    NSLog(@"Lost peer: %@", peerID);
+    NSLog(@"Did not start advertising PDF");
 }
 
-// Browsing did not start due to an error
-- (void)browser:(MCNearbyServiceBrowser *)browser didNotStartBrowsingForPeers:(NSError *)error
-{
-    NSLog(@"Did not start browsing for peers: %@", error);
-}
 
 #pragma mark - MCSessionDelegate
 // Remote peer changed state
 - (void)session:(MCSession *)session peer:(MCPeerID *)peerID didChangeState:(MCSessionState)state
 {
+    NSLog(@"Session: %@ peer:%@ didChangeState: %d", session, peerID, state );
+    
     if ([SessionManager shared].sessionOwner) {
         
         // send the PDF to the device. Once its complete, tell the device what page to open.
@@ -218,7 +215,9 @@
                     }
                     else
                     {
-                        [self tellPeers:@[peerID] toOpenPage:self.currentPage];
+                        dispatch_async(dispatch_get_main_queue(), ^{
+                            [self tellPeers:@[peerID] toOpenPage:self.currentPage];
+                        });
                     }
                 }];
                  
@@ -261,6 +260,8 @@
 // Start receiving a resource from remote peer
 - (void)session:(MCSession *)session didStartReceivingResourceWithName:(NSString *)resourceName fromPeer:(MCPeerID *)peerID withProgress:(NSProgress *)progress
 {
+    NSLog(@"didStartReceivingResourceWithName:%@", resourceName);
+    
     dispatch_async(dispatch_get_main_queue(), ^{
         MBProgressHUD* hud = [MBProgressHUD showHUDAddedTo:self.view animated:YES];
         [hud setDetailsLabelText:@"Loading PDF from Peer"];
@@ -271,6 +272,8 @@
 // Finished receiving a resource from remote peer and saved the content in a temporary location - the app is responsible for moving the file to a permanent location within its sandbox
 - (void)session:(MCSession *)session didFinishReceivingResourceWithName:(NSString *)resourceName fromPeer:(MCPeerID *)peerID atURL:(NSURL *)localURL withError:(NSError *)error
 {
+    NSLog(@"didFinishReceivingResourceWithName:%@ error:%@", resourceName, error);
+    
     NSURL* fileURL = nil;
     
     if(!error)

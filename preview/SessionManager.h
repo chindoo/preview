@@ -14,7 +14,10 @@
 +(instancetype) shared;
 
 @property (nonatomic, strong, readonly) MCPeerID* peer;
+@property (nonatomic, strong, readonly) MCPeerID* advertisingPeer;
+
 @property (nonatomic, strong, readonly) MCSession* session;
+@property (nonatomic, strong, readonly) MCSession* advertisingSession;
 
 /** Flag indicating this VC is the owner of the multipeer session **/
 @property (nonatomic, assign) BOOL sessionOwner;

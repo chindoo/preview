@@ -29,6 +29,9 @@
     {
         _peer = [[MCPeerID alloc] initWithDisplayName:@"Peer"];
         _session = [[MCSession alloc] initWithPeer:self.peer];
+        
+        _advertisingPeer = [[MCPeerID alloc] initWithDisplayName:@"Advertising Peer"];
+        _advertisingSession = [[MCSession alloc] initWithPeer:_advertisingPeer];
     }
     return self;
 }
