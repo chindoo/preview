@@ -10,14 +10,15 @@
 #import <MultipeerConnectivity/MultipeerConnectivity.h>
 #import "PDFPageViewController.h"
 #import "SessionManager.h"
+#import "MBProgressHUD.h"
 
 
-@interface ViewController () <MCNearbyServiceAdvertiserDelegate, UITableViewDataSource, UITableViewDelegate, MCSessionDelegate>
+@interface ViewController () <MCNearbyServiceBrowserDelegate, UITableViewDataSource, UITableViewDelegate, MCSessionDelegate>
 
-@property (nonatomic, strong) MCNearbyServiceAdvertiser* serviceAdvertiser;
+@property (nonatomic, strong) MCNearbyServiceBrowser* serviceBrowser;
 
 
-@property (nonatomic, strong) NSMutableArray* invitations;
+@property (nonatomic, strong) NSMutableArray* advertisers;
 
 @property (weak, nonatomic) IBOutlet UITableView *tableView;
 
@@ -45,16 +46,17 @@
 
 -(void) viewDidAppear:(BOOL)animated
 {
-    self.invitations = [NSMutableArray array];
+    self.advertisers = [NSMutableArray array];
     [self.tableView reloadData];
     
     [SessionManager shared].session.delegate = self;
     
-    if(nil == self.serviceAdvertiser)
+    if(nil == self.serviceBrowser)
     {
-        self.serviceAdvertiser = [[MCNearbyServiceAdvertiser alloc] initWithPeer:[[SessionManager shared] peer] discoveryInfo:nil serviceType:@"sch-preview"];
-        self.serviceAdvertiser.delegate = self;
-        [self.serviceAdvertiser startAdvertisingPeer];
+        NSLog(@"Starting browse for services");
+        self.serviceBrowser = [[MCNearbyServiceBrowser alloc] initWithPeer:[[SessionManager shared] peer] serviceType:@"sch-preview"];
+        self.serviceBrowser.delegate = self;
+        [self.serviceBrowser startBrowsingForPeers];
     }
     
 }
@@ -62,41 +64,56 @@
 -(void) viewWillDisappear:(BOOL)animated
 {
     if ([SessionManager shared].sessionOwner) {
-        [self.serviceAdvertiser stopAdvertisingPeer];
-        self.serviceAdvertiser = nil;
+        [self.serviceBrowser stopBrowsingForPeers];
+        self.serviceBrowser = nil;
     }
 
 }
 
-
-#pragma mark - MCNearbyServiceAdvertiserDelegate
-// Incoming invitation request.  Call the invitationHandler block with YES and a valid session to connect the inviting peer to the session.
-- (void)advertiser:(MCNearbyServiceAdvertiser *)advertiser didReceiveInvitationFromPeer:(MCPeerID *)peerID withContext:(NSData *)context invitationHandler:(void(^)(BOOL accept, MCSession *session))invitationHandler
+#pragma mark - MCNearbyServiceBrowserDelegate
+// Found a nearby advertising peer
+- (void)browser:(MCNearbyServiceBrowser *)browser foundPeer:(MCPeerID *)peerID withDiscoveryInfo:(NSDictionary *)info
 {
-    NSDictionary* invitation = @{@"handler": [invitationHandler copy], @"name":peerID.displayName};
-    [self.invitations addObject:invitation];
     
-    [self.tableView reloadData];
-}
-
-// Advertising did not start due to an error
-- (void)advertiser:(MCNearbyServiceAdvertiser *)advertiser didNotStartAdvertisingPeer:(NSError *)error
-{
-   [[[UIAlertView alloc] initWithTitle:@"Error Joining Session" message:@"Could not join sessions. Please ensure WiFi and Bluetooth are turned on" delegate:nil cancelButtonTitle:@"OK" otherButtonTitles: nil] show];
+    NSLog(@"Found adevertiser");
+    dispatch_async(    dispatch_get_main_queue(), ^{
+        [self.advertisers addObject:peerID];
+        [self.tableView reloadData];
+    });
     
 }
+
+// A nearby peer has stopped advertising
+- (void)browser:(MCNearbyServiceBrowser *)browser lostPeer:(MCPeerID *)peerID
+{
+ 
+    NSLog(@"Lost adevertiser");
+    dispatch_async(    dispatch_get_main_queue(), ^{
+        [self.advertisers removeObject:peerID];
+        [self.tableView reloadData];
+    });
+}
+
+// Browsing did not start due to an error
+- (void)browser:(MCNearbyServiceBrowser *)browser didNotStartBrowsingForPeers:(NSError *)error
+{
+    dispatch_async(    dispatch_get_main_queue(), ^{
+        [[[UIAlertView alloc] initWithTitle:@"Error Joining Session" message:@"Could not join sessions. Please ensure WiFi and Bluetooth are turned on" delegate:nil cancelButtonTitle:@"OK" otherButtonTitles: nil] show];
+    });
+}
+
 
 #pragma mark - UITableViewDataSource
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
 {
-    return self.invitations.count;
+    return self.advertisers.count;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
 {
     UITableViewCell* cell = [tableView dequeueReusableCellWithIdentifier:@"SessionCell"];
-    NSDictionary* invitation = [self.invitations objectAtIndex:[indexPath row]];
-    cell.textLabel.text = [invitation objectForKey:@"name"];
+    MCPeerID* peer = [self.advertisers objectAtIndex:[indexPath row]];
+    cell.textLabel.text = peer.displayName;
     
     return cell;
 }
@@ -104,9 +121,13 @@
 #pragma mark - UITableViewDelegate
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
 {
-    NSDictionary* invitation = [self.invitations objectAtIndex:[indexPath row]];
-    void (^invitationHandler)(BOOL accept, MCSession *session) = [invitation objectForKey:@"handler"];
-    invitationHandler(YES, [[SessionManager shared] session]);
+    MCPeerID* peer = [self.advertisers objectAtIndex:[indexPath row]];
+    [self.serviceBrowser invitePeer:peer toSession:[SessionManager shared].session withContext:nil timeout:30];
+    
+
+    MBProgressHUD* hud = [MBProgressHUD showHUDAddedTo:self.view animated:YES];
+    hud.detailsLabelText = @"Joining Session";
+    
 }
 
 #pragma mark - MCSessionDelegate
@@ -116,10 +137,10 @@
 {
     if (state == MCSessionStateConnected) {
         
-        //[self.serviceAdvertiser stopAdvertisingPeer];
-        //self.serviceAdvertiser = nil;
-        
         dispatch_async(dispatch_get_main_queue(), ^{
+            
+            [MBProgressHUD hideHUDForView:self.view animated:YES];
+            
             PDFPageViewController* pdfController = [[PDFPageViewController alloc] initWithNibName:@"PDFPageViewController" bundle:nil];
             
             [[[SessionManager shared] session] setDelegate:pdfController];
@@ -146,12 +167,12 @@
 // Start receiving a resource from remote peer
 - (void)session:(MCSession *)session didStartReceivingResourceWithName:(NSString *)resourceName fromPeer:(MCPeerID *)peerID withProgress:(NSProgress *)progress
 {
-    
+    NSLog(@"Started receiving resource in wrong View controller");
 }
 
 // Finished receiving a resource from remote peer and saved the content in a temporary location - the app is responsible for moving the file to a permanent location within its sandbox
 - (void)session:(MCSession *)session didFinishReceivingResourceWithName:(NSString *)resourceName fromPeer:(MCPeerID *)peerID atURL:(NSURL *)localURL withError:(NSError *)error
 {
-    
+    NSLog(@"Received resource in wrong View controller");
 }
 @end
